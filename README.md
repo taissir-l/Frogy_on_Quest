@@ -1,4 +1,6 @@
 # Frogy on Quest
+![Capture](https://github.com/taissir-l/Frogy_on_Quest/assets/128995791/13fc8398-3421-4594-9635-af2ce8c7560e)
+
 ## Overview
 "Frogy on Quest" is an engaging and challenging platformer game developed using Python and the Pygame library. Inspired by classic platformers, the game features a charming frog character embarking on a quest through various terrains filled with obstacles, traps, and enemies. Players navigate these terrains using intuitive controls and mechanics such as jumping and double jumping.
 
