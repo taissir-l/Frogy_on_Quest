@@ -39,4 +39,4 @@ Power-Ups: Introducing power-ups that provide special abilities to Frogy.
 Multiplayer Mode: Implementing a multiplayer mode for cooperative play.
 Contributing
 
-# If you would like to contribute to the development of "Frogy on Quest," please fork the repository and submit a pull request. For major changes, please open an issue to discuss what you would like to change.
+### If you would like to contribute to the development of "Frogy on Quest," please fork the repository and submit a pull request. For major changes, please open an issue to discuss what you would like to change.
