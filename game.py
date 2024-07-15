@@ -4,15 +4,37 @@ import math
 import pygame
 from os import listdir
 from os.path import isfile, join
+from pygame import mixer
+
 pygame.init()
 
-pygame.display.set_caption("Platformer")
+game_over = False
+main_menur = True
 
-WIDTH, HEIGHT = 1000, 800
+
+# title and logo
+
+pygame.display.set_caption("Frogy on Quest")
+icon = pygame.image.load('assets/logo/frog-prince.png')
+pygame.display.set_icon(icon)
+
+WIDTH, HEIGHT = 1300, 700
 FPS = 60
 PLAYER_VEL = 5
 
 window = pygame.display.set_mode((WIDTH, HEIGHT))
+gameover = 0
+
+# background sound
+mixer.music.load('assets/music/back_music.mp3')
+mixer.music.play(-1)
+pygame.mixer.music.set_volume(0.5)
+jump_fx = pygame.mixer.Sound('assets/music/jump.mp3')
+
+
+# menur images
+start_button = pygame.image.load('assets/Menu/start_btn.png')
+exit_button = pygame.image.load('assets/Menu/exit_btn.png')
 
 
 def flip(sprites):
@@ -71,7 +93,11 @@ class Player(pygame.sprite.Sprite):
         self.jump_count = 0
         self.hit = False
         self.hit_count = 0
-
+        self.pain = 0
+        self.saw_collisions = 0
+        self.fire_collisions = 0
+        self.dead_img = pygame.image.load('assets/Other/gost.png')
+    
     def jump(self):
         self.y_vel = -self.GRAVITY * 8
         self.animation_count = 0
@@ -101,13 +127,12 @@ class Player(pygame.sprite.Sprite):
     def loop(self, fps):
         self.y_vel += min(1, (self.fall_count / fps) * self.GRAVITY)
         self.move(self.x_vel, self.y_vel)
-
+ 
         if self.hit:
             self.hit_count += 1
         if self.hit_count > fps * 2:
             self.hit = False
             self.hit_count = 0
-
         self.fall_count += 1
         self.update_sprite()
 
@@ -141,7 +166,6 @@ class Player(pygame.sprite.Sprite):
         self.sprite = sprites[sprite_index]
         self.animation_count += 1
         self.update()
-
     def update(self):
         self.rect = self.sprite.get_rect(topleft=(self.rect.x, self.rect.y))
         self.mask = pygame.mask.from_surface(self.sprite)
@@ -201,6 +225,36 @@ class Fire(Object):
         if self.animation_count // self.ANIMATION_DELAY > len(sprites):
             self.animation_count = 0
 
+class Saw(Object):
+    ANIMATION_DELAY = 3
+
+    def __init__(self, x, y, width, height):
+        super().__init__(x, y, width, height, "saw")
+        self.saw = load_sprite_sheets("Traps", "Saw", width, height)
+        self.image = self.saw["off"][0]
+        self.mask = pygame.mask.from_surface(self.image)
+        self.animation_count = 0
+        self.animation_name = "off"
+
+    def on(self):
+        self.animation_name = "on"
+
+    def off(self):
+        self.animation_name = "off"
+
+    def loop(self):
+        sprites = self.saw[self.animation_name]
+        sprite_index = (self.animation_count //
+                        self.ANIMATION_DELAY) % len(sprites)
+        self.image = sprites[sprite_index]
+        self.animation_count += 1
+
+        self.rect = self.image.get_rect(topleft=(self.rect.x, self.rect.y))
+        self.mask = pygame.mask.from_surface(self.image)
+
+        if self.animation_count // self.ANIMATION_DELAY > len(sprites):
+            self.animation_count = 0
+
 
 def get_background(name):
     image = pygame.image.load(join("assets", "Background", name))
@@ -213,7 +267,6 @@ def get_background(name):
             tiles.append(pos)
 
     return tiles, image
-
 
 def draw(window, background, bg_image, player, objects, offset_x):
     for tile in background:
@@ -259,7 +312,6 @@ def collide(player, objects, dx):
 
 def handle_move(player, objects):
     keys = pygame.key.get_pressed()
-
     player.x_vel = 0
     collide_left = collide(player, objects, -PLAYER_VEL * 2)
     collide_right = collide(player, objects, PLAYER_VEL * 2)
@@ -273,23 +325,156 @@ def handle_move(player, objects):
     to_check = [collide_left, collide_right, *vertical_collide]
 
     for obj in to_check:
-        if obj and obj.name == "fire":
-            player.make_hit()
+        if obj:
+            if obj.name == "fire" or obj.name == "saw":
+                player.make_hit()
+                global game_over
+                game_over = True  # Set game over state
+                return  # Exit the function early
 
+
+def draw_game_over(window):
+    font = pygame.font.Font('assets/Other/fonts.ttf', 80)
+    #font = pygame.font.SysFont('Pixelify Sans', 64)
+    text = font.render('Game Over', True, (20, 0, 0))
+    text_rect = text.get_rect(center=(WIDTH // 2, HEIGHT // 2))
+    window.blit(text, text_rect)
+    pygame.display.update()
 
 def main(window):
     clock = pygame.time.Clock()
     background, bg_image = get_background("Blue.png")
 
     block_size = 96
+    global game_over
 
-    player = Player(100, 100, 50, 50)
-    fire = Fire(100, HEIGHT - block_size - 64, 16, 32)
-    fire.on()
     floor = [Block(i * block_size, HEIGHT - block_size, block_size)
-             for i in range(-WIDTH // block_size, (WIDTH * 2) // block_size)]
+             for i in range(-WIDTH // block_size * 3, (WIDTH * 2) // block_size * 3)]
+    player = Player(0, 0, 50, 50)
+    saw = [Saw(block_size * 77,HEIGHT - block_size - 64, 38, 38), 
+           Saw(block_size * 66,HEIGHT - block_size - 64, 38, 38), 
+           Saw(block_size * 67,HEIGHT - block_size - 64, 38, 38),
+           Saw(block_size * 66.5,HEIGHT - block_size * 3, 38, 38),
+           Saw(block_size * 16,HEIGHT - block_size * 5, 38, 38),
+           Saw(block_size * 31,HEIGHT - block_size * 2, 38, 38),
+           Saw(block_size * 41,HEIGHT - block_size * 2, 38, 38),
+           Saw(block_size * 60,HEIGHT - block_size * 4, 38, 38),
+           Saw(block_size * 61,HEIGHT - block_size * 3.5, 38, 38),
+           Saw(block_size * 37,HEIGHT - block_size * 1.8, 38, 38),
+           Saw(block_size * 9,HEIGHT - block_size * 1.8, 38, 38)]
+    floor.extend(saw)
+    for s in saw:
+        s.on()
+    fire = [Fire(200, HEIGHT - block_size - 64, 16, 32),
+            Fire(block_size * 7, HEIGHT - block_size - 64, 16, 32),
+            Fire(block_size * 7.5, HEIGHT - block_size - 64, 16, 32), 
+            Fire(block_size * 14, HEIGHT - block_size - 64, 16, 32),
+            Fire(block_size * 14.5, HEIGHT - block_size - 64, 16, 32), 
+            Fire(block_size * 18, HEIGHT - block_size - 64, 16, 32),
+            Fire(block_size * 18.5, HEIGHT - block_size - 64, 16, 32), 
+            Fire(block_size * 27, HEIGHT - block_size - 64, 16, 32),
+            Fire(block_size * 27.5, HEIGHT - block_size - 64, 16, 32), 
+            Fire(block_size * 32, HEIGHT - block_size - 64, 16, 32),
+            Fire(block_size * 32.5, HEIGHT - block_size - 64, 16, 32), 
+            Fire(block_size * 33, HEIGHT - block_size - 64, 16, 32),
+            Fire(block_size * 39, HEIGHT - block_size - 64, 16, 32),
+            Fire(block_size * 39.5, HEIGHT - block_size - 64, 16, 32),
+            Fire(block_size * 45, HEIGHT - block_size - 64, 16, 32),
+            Fire(block_size * 45.5, HEIGHT - block_size - 64, 16, 32),
+            Fire(block_size * 47, HEIGHT - block_size - 64, 16, 32),
+            Fire(block_size * 47.5, HEIGHT - block_size - 64, 16, 32),
+            Fire(block_size * 49, HEIGHT - block_size - 64, 16, 32),
+            Fire(block_size * 49.5, HEIGHT - block_size - 64, 16, 32),
+            Fire(block_size * 51, HEIGHT - block_size - 64, 16, 32),
+            Fire(block_size * 51.5, HEIGHT - block_size - 64, 16, 32),
+            Fire(block_size * 53, HEIGHT - block_size - 64, 16, 32),
+            Fire(block_size * 53.5, HEIGHT - block_size - 64, 16, 32),
+            Fire(block_size * 55, HEIGHT - block_size - 64, 16, 32),
+            Fire(block_size * 55.5, HEIGHT - block_size - 64, 16, 32),
+            Fire(block_size * 56, HEIGHT - block_size - 64, 16, 32),
+            Fire(block_size * 56.5, HEIGHT - block_size - 64, 16, 32)]
+    floor.extend(fire)
+    for f in fire:
+        f.on()
+    
     objects = [*floor, Block(0, HEIGHT - block_size * 2, block_size),
-               Block(block_size * 3, HEIGHT - block_size * 4, block_size), fire]
+               Block(block_size * 3, HEIGHT - block_size * 4, block_size), 
+               Block(block_size * 8, HEIGHT - block_size * 2, block_size),
+               Block(block_size * 8, HEIGHT - block_size * 4, block_size),
+               Block(block_size * 8, HEIGHT - block_size * 5, block_size),
+               Block(block_size * 8, HEIGHT - block_size * 6, block_size),
+               Block(block_size * 12, HEIGHT - block_size * 2, block_size),
+               Block(block_size * 13, HEIGHT - block_size * 2, block_size),
+               Block(block_size * 13, HEIGHT - block_size * 3, block_size),
+               Block(block_size * 15, HEIGHT - block_size * 4, block_size),
+               Block(block_size * 16, HEIGHT - block_size * 4, block_size),
+               Block(block_size * 17, HEIGHT - block_size * 4, block_size),
+               Block(block_size * 21, HEIGHT - block_size * 2, block_size),
+               Block(block_size * 22, HEIGHT - block_size * 3, block_size),
+               Block(block_size * 23, HEIGHT - block_size * 4, block_size),
+               Block(block_size * 24, HEIGHT - block_size * 5, block_size),
+               Block(block_size * 25, HEIGHT - block_size * 6, block_size),
+               Block(block_size * 26, HEIGHT - block_size * 6, block_size),
+               Block(block_size * 28, HEIGHT - block_size * 4, block_size),
+               Block(block_size * 29, HEIGHT - block_size * 4, block_size),
+               Block(block_size * 36, HEIGHT - block_size * 3, block_size),
+               Block(block_size * 37, HEIGHT - block_size * 3, block_size),
+               Block(block_size * 38, HEIGHT - block_size * 3, block_size),
+               Block(block_size * 38, HEIGHT - block_size * 2, block_size),
+               Block(block_size * 44, HEIGHT - block_size * 2, block_size),
+               Block(block_size * 44, HEIGHT - block_size * 4, block_size),
+               Block(block_size * 44, HEIGHT - block_size * 5, block_size),
+               Block(block_size * 44, HEIGHT - block_size * 6, block_size),
+               Block(block_size * 44, HEIGHT - block_size * 7, block_size),
+               Block(block_size * 46, HEIGHT - block_size * 2, block_size),
+               Block(block_size * 46, HEIGHT - block_size * 3, block_size),
+               Block(block_size * 46, HEIGHT - block_size * 5, block_size),
+               Block(block_size * 46, HEIGHT - block_size * 6, block_size),
+               Block(block_size * 46, HEIGHT - block_size * 7, block_size),
+               Block(block_size * 48, HEIGHT - block_size * 2, block_size),
+               Block(block_size * 48, HEIGHT - block_size * 3, block_size),
+               Block(block_size * 48, HEIGHT - block_size * 4, block_size),
+               Block(block_size * 48, HEIGHT - block_size * 6, block_size),
+               Block(block_size * 48, HEIGHT - block_size * 7, block_size),
+               Block(block_size * 50, HEIGHT - block_size * 2, block_size),
+               Block(block_size * 50, HEIGHT - block_size * 3, block_size),
+               Block(block_size * 50, HEIGHT - block_size * 5, block_size),
+               Block(block_size * 50, HEIGHT - block_size * 6, block_size),
+               Block(block_size * 50, HEIGHT - block_size * 7, block_size),
+               Block(block_size * 52, HEIGHT - block_size * 2, block_size),
+               Block(block_size * 52, HEIGHT - block_size * 3, block_size),
+               Block(block_size * 52, HEIGHT - block_size * 4, block_size),
+               Block(block_size * 52, HEIGHT - block_size * 6, block_size),
+               Block(block_size * 52, HEIGHT - block_size * 7, block_size),
+               Block(block_size * 54, HEIGHT - block_size * 2, block_size),
+               Block(block_size * 54, HEIGHT - block_size * 3, block_size),
+               Block(block_size * 54, HEIGHT - block_size * 4, block_size),
+               Block(block_size * 54, HEIGHT - block_size * 5, block_size),
+               Block(block_size * 54, HEIGHT - block_size * 7, block_size),
+               Block(block_size * 57, HEIGHT - block_size * 4, block_size),
+               Block(block_size * 58, HEIGHT - block_size * 4, block_size),
+               Block(block_size * 59, HEIGHT - block_size * 4, block_size),
+               Block(block_size * 61, HEIGHT - block_size * 2, block_size),
+               Block(block_size * 62, HEIGHT - block_size * 2, block_size),
+               Block(block_size * 63, HEIGHT - block_size * 2, block_size),
+               Block(block_size * 64, HEIGHT - block_size * 2, block_size),
+               Block(block_size * 65, HEIGHT - block_size * 2, block_size),
+               Block(block_size * 68, HEIGHT - block_size * 2, block_size),
+               Block(block_size * 69, HEIGHT - block_size * 2, block_size),
+               Block(block_size * 70, HEIGHT - block_size * 2, block_size),
+               Block(block_size * 71, HEIGHT - block_size * 2, block_size),
+               Block(block_size * 72, HEIGHT - block_size * 1, block_size),
+               Block(block_size * 73, HEIGHT - block_size * 1, block_size),
+               Block(block_size * 74, HEIGHT - block_size * 1, block_size),
+               Block(block_size * 75, HEIGHT - block_size * 1, block_size),
+               Block(block_size * 76, HEIGHT - block_size * 1, block_size),
+               Block(block_size * 78, HEIGHT - block_size * 1, block_size),
+               Block(block_size * 79, HEIGHT - block_size * 1, block_size),
+               Block(block_size * 80, HEIGHT - block_size * 1, block_size),
+               Block(block_size * 81, HEIGHT - block_size * 1, block_size),
+               Block(block_size * 82, HEIGHT - block_size * 1, block_size),
+               Block(block_size * 83, HEIGHT - block_size * 1, block_size)]
+
 
     offset_x = 0
     scroll_area_width = 200
@@ -298,6 +483,8 @@ def main(window):
     while run:
         clock.tick(FPS)
 
+        
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 run = False
@@ -305,20 +492,30 @@ def main(window):
 
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE and player.jump_count < 2:
+                    jump_fx.play()
                     player.jump()
+        
+        if game_over:
+            draw_game_over(window)
+            continue 
 
         player.loop(FPS)
-        fire.loop()
+        for s in saw:
+            s.loop()
+        # Loop through each fire object and call its loop method
+        for f in fire:
+            f.loop()
+
         handle_move(player, objects)
         draw(window, background, bg_image, player, objects, offset_x)
 
         if ((player.rect.right - offset_x >= WIDTH - scroll_area_width) and player.x_vel > 0) or (
                 (player.rect.left - offset_x <= scroll_area_width) and player.x_vel < 0):
             offset_x += player.x_vel
-
+    
+    
     pygame.quit()
     quit()
-
 
 if __name__ == "__main__":
     main(window)
