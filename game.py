@@ -9,7 +9,7 @@ from pygame import mixer
 pygame.init()
 
 game_over = False
-main_menur = True
+main_menu = True
 
 
 # title and logo
@@ -19,8 +19,8 @@ icon = pygame.image.load('assets/logo/frog-prince.png')
 pygame.display.set_icon(icon)
 
 WIDTH, HEIGHT = 1300, 700
-FPS = 60
-PLAYER_VEL = 5
+FPS = 50
+PLAYER_VEL = 14
 
 window = pygame.display.set_mode((WIDTH, HEIGHT))
 gameover = 0
@@ -33,8 +33,11 @@ jump_fx = pygame.mixer.Sound('assets/music/jump.mp3')
 
 
 # menur images
-start_button = pygame.image.load('assets/Menu/start_btn.png')
-exit_button = pygame.image.load('assets/Menu/exit_btn.png')
+start_img = pygame.image.load('assets/Menu/start_btn.png')
+exit_img = pygame.image.load('assets/Menu/exit_btn.png')
+restart_img = pygame.image.load('assets/Menu/restart_btn.png')
+background_img = pygame.image.load('assets/Menu/mmenu.png')
+
 
 
 def flip(sprites):
@@ -75,6 +78,38 @@ def get_block(size):
     return pygame.transform.scale2x(surface)
 
 
+class Button():
+	def __init__(self, x, y, image):
+		self.image = image
+		self.rect = self.image.get_rect()
+		self.rect.x = x
+		self.rect.y = y
+		self.clicked = False
+
+	def draw(self):
+		action = False
+
+		#get mouse position
+		pos = pygame.mouse.get_pos()
+
+		#check mouseover and clicked conditions
+		if self.rect.collidepoint(pos):
+			if pygame.mouse.get_pressed()[0] == 1 and self.clicked == False:
+				action = True
+				self.clicked = True
+
+		if pygame.mouse.get_pressed()[0] == 0:
+			self.clicked = False
+
+
+		#draw button
+		window.blit(self.image, self.rect)
+
+		return action
+
+
+
+
 class Player(pygame.sprite.Sprite):
     COLOR = (255, 0, 0)
     GRAVITY = 1
@@ -96,6 +131,8 @@ class Player(pygame.sprite.Sprite):
         self.pain = 0
         self.saw_collisions = 0
         self.fire_collisions = 0
+        self.rect = pygame.Rect(0, 0, 50, 50)  # Placeholder rect
+
         self.dead_img = pygame.image.load('assets/Other/gost.png')
     
     def jump(self):
@@ -172,6 +209,13 @@ class Player(pygame.sprite.Sprite):
 
     def draw(self, win, offset_x):
         win.blit(self.sprite, (self.rect.x - offset_x, self.rect.y))
+    
+    def reset(self, x, y):
+        # Reset player state
+        self.rect.x = x
+        self.rect.y = y
+        self.jump_count = 0
+        self.x_vel = 0
 
 
 class Object(pygame.sprite.Sprite):
@@ -278,6 +322,9 @@ def draw(window, background, bg_image, player, objects, offset_x):
     player.draw(window, offset_x)
 
     pygame.display.update()
+        
+    window.blit(background_img, (0, 0))  # Draw the background image
+
 
 
 def handle_vertical_collision(player, objects, dy):
@@ -347,6 +394,7 @@ def main(window):
 
     block_size = 96
     global game_over
+    global main_menu
 
     floor = [Block(i * block_size, HEIGHT - block_size, block_size)
              for i in range(-WIDTH // block_size * 3, (WIDTH * 2) // block_size * 3)]
@@ -479,11 +527,17 @@ def main(window):
     offset_x = 0
     scroll_area_width = 200
 
+    #create buttons
+    restart_button = Button(WIDTH // 2 - 50, HEIGHT // 2 + 100, restart_img)
+    start_button = Button(WIDTH // 2 - 350, HEIGHT // 2, start_img)
+    exit_button = Button(WIDTH // 2 + 150, HEIGHT // 2, exit_img)
+
+
+
     run = True
     while run:
         clock.tick(FPS)
 
-        
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -491,13 +545,26 @@ def main(window):
                 break
 
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE and player.jump_count < 2:
+                if event.key == pygame.K_SPACE and player.jump_count < 2 and not main_menu and not game_over:
                     jump_fx.play()
                     player.jump()
-        
+
+        if main_menu:
+            window.blit(background_img, (0, 0))  # Clear the screen with a background color
+            if exit_button.draw():
+                run = False
+            if start_button.draw():
+                main_menu = False
+            pygame.display.update()
+            continue
+
         if game_over:
             draw_game_over(window)
-            continue 
+            if restart_button.draw():
+                player.reset(100, HEIGHT - 130)
+                game_over = False
+            pygame.display.update()
+            continue
 
         player.loop(FPS)
         for s in saw:
